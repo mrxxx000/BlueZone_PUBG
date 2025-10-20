@@ -26,8 +26,8 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
         setBackground(new Color(11,18,32));
         addMouseMotionListener(this);
         sim.reset(30);
-        // set initial maxRounds according to countdown (10s per round)
-        sim.maxRounds = Math.max(1, (int) Math.ceil(countdownSeconds / 10.0));
+    // always use 6 rounds (game length fixed). The game may finish earlier per Simulator rules.
+    sim.maxRounds = 6;
         animTimer = new Timer(30, e -> { sim.stepAnimation(); repaint(); });
         animTimer.start();
 
@@ -38,8 +38,8 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
             if(countdownSeconds == 0){
                 // countdown ended -> finish game and stop
                 countdownTimer.stop();
-                // ensure maxRounds matches elapsed intervals
-                sim.maxRounds = Math.max(1, (int) Math.ceil(60 / 10.0));
+                // ensure maxRounds is fixed to 6 on countdown end
+                sim.maxRounds = 6;
                 sim.finishGame();
                 updateRoundLabel();
                 showWinner();
@@ -70,8 +70,8 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
 
     public void reset(int count){
         sim.reset(count);
-        // set maxRounds proportional to countdown seconds (10s per round)
-    sim.maxRounds = Math.max(1, (int)Math.ceil(countdownSeconds / 10.0));
+        // fixed to 6 rounds
+    sim.maxRounds = 6;
         // restart countdown
         resetCountdown();
         startCountdown();
