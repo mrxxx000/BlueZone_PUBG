@@ -8,13 +8,12 @@ import java.awt.*;
 public class BlueZoneFrame extends JFrame {
     private final BlueZonePanel panel;
 
-    public BlueZoneFrame(Simulator sim, boolean leftOnly){
-        setTitle(leftOnly ? "Adaptive (left) - BlueZone" : "Random (right) - BlueZone");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(600, 640);
-        setLocationRelativeTo(null);
+    public BlueZoneFrame(Simulator sim){
+        setTitle("Adaptive - BlueZone");
+    setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+    setLocationRelativeTo(null);
 
-        panel = new BlueZonePanel(sim, leftOnly);
+    panel = new BlueZonePanel(sim);
 
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
         top.add(new JLabel("Players:"));
@@ -39,5 +38,6 @@ public class BlueZoneFrame extends JFrame {
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(top, BorderLayout.NORTH);
         getContentPane().add(panel, BorderLayout.CENTER);
+        pack();
     }
 }

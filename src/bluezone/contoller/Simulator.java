@@ -16,7 +16,6 @@ public class Simulator {
     public final Map<Player, Long> outsideSince = new HashMap<>();
 
     public Zone adaptiveLeft;
-    public Zone randomRight;
     // per-zone winner ids (-1 means none)
     public int winnerLeftId = -1;
     public int winnerRightId = -1;
@@ -27,15 +26,12 @@ public class Simulator {
 
     public void reset(int count){
         players.clear();
-        int leftMaxX = canvasW/2 - 20;
-        int rightMinX = canvasW/2 + 20;
+        int leftMaxX = canvasW - 20;
         for(int i=0;i<count;i++){
             Player p = new Player();
             p.id = i;
             p.x = rand(20, leftMaxX);
             p.y = rand(20, canvasH-20);
-            p.x2 = rand(rightMinX, canvasW-20);
-            p.y2 = rand(20, canvasH-20);
             p.kills = rng.nextInt(5);
             p.distance = rng.nextInt(1000);
             p.activity = rng.nextDouble();
@@ -43,8 +39,7 @@ public class Simulator {
             players.add(p);
         }
         round = 0;
-        adaptiveLeft = new Zone(canvasW/4, canvasH/2);
-        randomRight = new Zone(3*canvasW/4, canvasH/2);
+        adaptiveLeft = new Zone(canvasW/2, canvasH/2);
     }
 
     public boolean isFinished(){
@@ -53,10 +48,8 @@ public class Simulator {
 
     public void advanceRound(){
         if(round >= maxRounds) return;
-        Zone[] adapt = candidateAdaptive();
-        Zone randz = candidateRandom();
-        adaptiveLeft = adapt[0];
-        randomRight = randz;
+    Zone[] adapt = candidateAdaptive();
+    adaptiveLeft = adapt[0];
 
         round++;
         outsideSince.clear();
@@ -79,15 +72,13 @@ public class Simulator {
         // If we've reached max rounds or only 0/1 players remain, determine the final winner
         long aliveNow = players.stream().filter(p -> p.alive).count();
 
-        // compute per-zone inside counts using currentRadius
+        // compute inside count using currentRadius
         double currentRadius = roundRadii[Math.min(round, roundRadii.length - 1)];
-        int inLeft = 0; int inRight = 0;
+        int inLeft = 0;
         for (Player p : players) {
             if (!p.alive) continue;
             double dLeft = Math.hypot(p.x - adaptiveLeft.x, p.y - adaptiveLeft.y);
             if (dLeft <= currentRadius) inLeft++;
-            double dRight = Math.hypot(p.x2 - randomRight.x, p.y2 - randomRight.y);
-            if (dRight <= currentRadius) inRight++;
         }
 
         // If a zone has exactly one alive player inside and we haven't recorded a winner for that zone yet,
@@ -99,13 +90,7 @@ public class Simulator {
                 if (d <= currentRadius) { winnerLeftId = p.id; break; }
             }
         }
-        if (inRight == 1 && winnerRightId == -1) {
-            for (Player p : players) {
-                if (!p.alive) continue;
-                double d = Math.hypot(p.x2 - randomRight.x, p.y2 - randomRight.y);
-                if (d <= currentRadius) { winnerRightId = p.id; break; }
-            }
-        }
+        // no right zone anymore
 
         // If global only one or zero players remain, finish the game early and compute any missing winners
         if (round >= maxRounds || aliveNow <= 1) {
@@ -118,11 +103,8 @@ public class Simulator {
             if(!p.alive) continue;
             double speed = 0.4 + p.activity * 1.2;
             p.x += rand(-1,1) * speed; p.y += rand(-1,1) * speed;
-            p.x2 += rand(-1,1) * speed; p.y2 += rand(-1,1) * speed;
-            p.x = clamp(p.x, 12, canvasW/2 - 12);
+            p.x = clamp(p.x, 12, canvasW - 12);
             p.y = clamp(p.y, 12, canvasH - 12);
-            p.x2 = clamp(p.x2, canvasW/2 + 12, canvasW - 12);
-            p.y2 = clamp(p.y2, 12, canvasH - 12);
         }
         long now = System.currentTimeMillis();
         double currentRadius = roundRadii[Math.min(round, roundRadii.length-1)];
@@ -141,17 +123,11 @@ public class Simulator {
         }
     }
 
-    private Zone candidateRandom(){
-        double x2 = rand(canvasW/2 + 60, canvasW - 60);
-        double y2 = rand(60, canvasH - 60);
-        return new Zone(x2, y2);
-    }
-
     private Zone[] candidateAdaptive(){
         List<Player> alive = new ArrayList<>();
         for(Player p : players) if(p.alive) alive.add(p);
         if(alive.isEmpty()){
-            return new Zone[]{ new Zone(canvasW/4, canvasH/2), new Zone(3*canvasW/4, canvasH/2) };
+            return new Zone[]{ new Zone(canvasW/2, canvasH/2) };
         }
         double[] weights = new double[alive.size()];
         double sum = 0;
@@ -161,8 +137,7 @@ public class Simulator {
             sum += weights[i];
         }
         Zone left = sampleWeighted(alive, weights, sum, true);
-        Zone right = sampleWeighted(alive, weights, sum, false);
-        return new Zone[]{left, right};
+        return new Zone[]{left};
     }
 
     private Zone sampleWeighted(List<Player> alive, double[] weights, double sum, boolean useLeft){
@@ -170,47 +145,33 @@ public class Simulator {
         while(r > 0 && idx < weights.length){ r -= weights[idx++]; }
         Player p = alive.get(Math.max(0, idx-1));
         double jitter = 60;
-        if(useLeft){
-            double x = clamp(p.x + rand(-jitter, jitter), 60, canvasW/2 - 60);
-            double y = clamp(p.y + rand(-jitter, jitter), 60, canvasH - 60);
-            return new Zone(x,y);
-        } else {
-            double x = clamp(p.x2 + rand(-jitter, jitter), canvasW/2 + 60, canvasW - 60);
-            double y = clamp(p.y2 + rand(-jitter, jitter), 60, canvasH - 60);
-            return new Zone(x,y);
-        }
+        double x = clamp(p.x + rand(-jitter, jitter), 60, canvasW - 60);
+        double y = clamp(p.y + rand(-jitter, jitter), 60, canvasH - 60);
+        return new Zone(x,y);
     }
 
     private double clamp(double v, double a, double b){ return Math.max(a, Math.min(b, v)); }
 
     private void checkFinalWinner(){
-        // Determine a winner for the left (adaptive) zone and the right (random) zone separately.
+        // Determine a winner for the adaptive zone.
         winnerLeftId = findZoneWinner(true);
-        winnerRightId = findZoneWinner(false);
-
-        // Keep the old randomRight channel for backward compatibility: store the right winner id here
-        if (winnerRightId >= 0) {
-            Player w = null; for (Player p : players) if (p.id == winnerRightId) w = p;
-            if (w != null) randomRight = new Zone(w.id, w.kills);
-            else randomRight = new Zone(-1, 0);
-        } else {
-            randomRight = new Zone(-1, 0);
-        }
+        // clear any old randomRight data
+        // (no random zone in this simplified version)
     }
 
     // returns the winning player's id for the left zone (useLeft=true) or right zone (false), or -1
     private int findZoneWinner(boolean useLeft){
         double bestScore = Double.NEGATIVE_INFINITY;
         Player best = null;
-        double zx = useLeft && adaptiveLeft != null ? adaptiveLeft.x : (randomRight != null ? randomRight.x : -1);
-        double zy = useLeft && adaptiveLeft != null ? adaptiveLeft.y : (randomRight != null ? randomRight.y : -1);
+    double zx = adaptiveLeft != null ? adaptiveLeft.x : -1;
+    double zy = adaptiveLeft != null ? adaptiveLeft.y : -1;
         double currentRadius = roundRadii[Math.min(round, roundRadii.length - 1)];
 
         // prefer alive players inside the zone
         for (Player p : players) {
             if (!p.alive) continue;
-            double px = useLeft ? p.x : p.x2;
-            double py = useLeft ? p.y : p.y2;
+            double px = p.x;
+            double py = p.y;
             if (zx < 0 || zy < 0) continue;
             double d = Math.hypot(px - zx, py - zy);
             if (d > currentRadius) continue;
