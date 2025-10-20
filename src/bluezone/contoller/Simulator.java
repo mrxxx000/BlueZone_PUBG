@@ -13,6 +13,8 @@ public class Simulator {
     public int maxRounds = 6;
     // minimum rounds that must be played before a winner can be declared
     public static final int MIN_ROUNDS = 3;
+    // when true, candidateAdaptive() will return a random zone rather than sampling players
+    public boolean randomMode = false;
     // Increased slightly so the zone shrinks a bit more slowly per round
     public final double[] roundRadii = new double[]{240, 200, 160, 130, 110, 80, 60};
     public final Map<Player, Long> outsideSince = new HashMap<>();
@@ -41,7 +43,7 @@ public class Simulator {
             players.add(p);
         }
         round = 0;
-        adaptiveLeft = new Zone(canvasW/2, canvasH/2);
+        if (randomMode) adaptiveLeft = candidateRandom(); else adaptiveLeft = new Zone(canvasW/2, canvasH/2);
     }
 
     public boolean isFinished(){
@@ -157,6 +159,12 @@ public class Simulator {
         double jitter = 60;
         double x = clamp(p.x + rand(-jitter, jitter), 60, canvasW - 60);
         double y = clamp(p.y + rand(-jitter, jitter), 60, canvasH - 60);
+        return new Zone(x,y);
+    }
+
+    private Zone candidateRandom(){
+        double x = rand(60, canvasW - 60);
+        double y = rand(60, canvasH - 60);
         return new Zone(x,y);
     }
 
