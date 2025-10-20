@@ -34,7 +34,7 @@ public class Simulator {
             p.id = i;
             p.x = rand(20, leftMaxX);
             p.y = rand(20, canvasH-20);
-            p.kills = rng.nextInt(5);
+            p.kills = rng.nextInt(10);
             p.distance = rng.nextInt(1000);
             p.activity = rng.nextDouble();
             p.alive = true;
