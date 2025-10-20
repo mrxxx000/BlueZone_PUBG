@@ -27,13 +27,26 @@ public class BlueZoneFrame extends JFrame {
         JLabel roundLabel = new JLabel("Round: 0");
         top.add(roundLabel);
         top.add(Box.createHorizontalStrut(16));
+        JLabel countdown = new JLabel("Countdown: 60s");
+        top.add(countdown);
+        top.add(Box.createHorizontalStrut(16));
         JLabel hover = new JLabel("Hover over a player");
         top.add(hover);
+        resetBtn.addActionListener(e -> {
+            int count = (Integer) spinner.getValue();
+            panel.reset(count);
+            panel.resetCountdown();
+            roundLabel.setText("Round: 0");
+            roundBtn.setEnabled(true);
+            spinner.setEnabled(true);
+            panel.startCountdown();
+            panel.updateCountdownLabel();
+        });
+        roundBtn.addActionListener(e -> { panel.advanceByOneStep(); roundLabel.setText("Round: " + panel.getRound()); if(panel.isFinished()){ roundBtn.setEnabled(false); spinner.setEnabled(false); } });
 
-        resetBtn.addActionListener(e -> { int count = (Integer) spinner.getValue(); panel.reset(count); roundLabel.setText("Round: 0"); roundBtn.setEnabled(true); spinner.setEnabled(true); });
-        roundBtn.addActionListener(e -> { panel.advanceRound(); roundLabel.setText("Round: " + panel.getRound()); if(panel.isFinished()){ roundBtn.setEnabled(false); spinner.setEnabled(false); } });
-
-        panel.setHoverLabel(hover);
+    panel.setHoverLabel(hover);
+    panel.setRoundLabel(roundLabel);
+    panel.setCountdownLabel(countdown);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(top, BorderLayout.NORTH);

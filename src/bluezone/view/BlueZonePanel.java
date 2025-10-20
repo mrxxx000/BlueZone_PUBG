@@ -13,6 +13,11 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
     private final Simulator sim;
     private JLabel hoverLabel = null;
     private final Timer animTimer;
+    private Timer countdownTimer;
+    private int countdownSeconds = 60;
+    private int lastMultipleTriggered = -1;
+    private JLabel roundLabel = null;
+    private JLabel countdownLabel = null;
     // single adaptive map only
 
     public BlueZonePanel(Simulator sim){
@@ -21,17 +26,80 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
         setBackground(new Color(11,18,32));
         addMouseMotionListener(this);
         sim.reset(30);
+        // set initial maxRounds according to countdown (10s per round)
+        sim.maxRounds = Math.max(1, (int) Math.ceil(countdownSeconds / 10.0));
         animTimer = new Timer(30, e -> { sim.stepAnimation(); repaint(); });
         animTimer.start();
+
+        countdownTimer = new Timer(1000, e -> {
+            if(sim.isFinished()) { countdownTimer.stop(); return; }
+            countdownSeconds = Math.max(0, countdownSeconds - 1);
+            updateCountdownLabel();
+            if(countdownSeconds == 0){
+                // countdown ended -> finish game and stop
+                countdownTimer.stop();
+                // ensure maxRounds matches elapsed intervals
+                sim.maxRounds = Math.max(1, (int) Math.ceil(60 / 10.0));
+                sim.finishGame();
+                updateRoundLabel();
+                showWinner();
+                return;
+            }
+            if(countdownSeconds % 10 == 0 && countdownSeconds != lastMultipleTriggered){
+                lastMultipleTriggered = countdownSeconds;
+                doAdvanceRound();
+            }
+        });
+        countdownTimer.start();
     }
 
     public void setHoverLabel(JLabel l){ this.hoverLabel = l; }
 
+    public void setRoundLabel(JLabel l){ this.roundLabel = l; updateRoundLabel(); }
+    public void setCountdownLabel(JLabel l){ this.countdownLabel = l; updateCountdownLabel(); }
+
+    // control countdown externally
+    public void resetCountdown(){ this.countdownSeconds = 60; this.lastMultipleTriggered = -1; updateCountdownLabel(); }
+    public void startCountdown(){ if(countdownTimer != null && !countdownTimer.isRunning()) countdownTimer.start(); }
+    public void stopCountdown(){ if(countdownTimer != null && countdownTimer.isRunning()) countdownTimer.stop(); }
+    public void updateCountdownLabel(){ if(countdownLabel != null) countdownLabel.setText("Countdown: " + countdownSeconds + "s"); }
+    public int getCountdownSeconds(){ return countdownSeconds; }
+
     public int getRound(){ return sim.round; }
     public boolean isFinished(){ return sim.isFinished(); }
 
-    public void reset(int count){ sim.reset(count); }
-    public void advanceRound(){ sim.advanceRound(); if(sim.isFinished()){ showWinner(); } }
+    public void reset(int count){
+        sim.reset(count);
+        // set maxRounds proportional to countdown seconds (10s per round)
+    sim.maxRounds = Math.max(1, (int)Math.ceil(countdownSeconds / 10.0));
+        // restart countdown
+        resetCountdown();
+        startCountdown();
+        updateRoundLabel();
+    }
+    public void advanceRound(){ sim.advanceRound(); if(sim.isFinished()){ showWinner(); } updateRoundLabel(); }
+
+    // Advance equivalent to spending 10 seconds: reduce countdown by 10 and advance one round
+    public void advanceByOneStep(){
+        if(sim.isFinished()) return;
+        countdownSeconds = Math.max(0, countdownSeconds - 10);
+        // prevent immediate double-trigger
+        lastMultipleTriggered = countdownSeconds;
+        updateCountdownLabel();
+        doAdvanceRound();
+    }
+
+    private void doAdvanceRound(){
+        sim.advanceRound();
+        updateRoundLabel();
+        if(sim.isFinished()){
+            countdownTimer.stop();
+            showWinner();
+        }
+    }
+
+    private void updateRoundLabel(){ if(roundLabel != null) roundLabel.setText("Round: " + sim.round); }
+    
 
     private void showWinner(){
     // Show the adaptive zone winner and stats

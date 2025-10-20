@@ -10,7 +10,9 @@ public class Simulator {
     public final List<Player> players = new ArrayList<>();
     private final Random rng = new Random();
     public int round = 0;
-    public final int maxRounds = 7;
+    public int maxRounds = 6;
+    // minimum rounds that must be played before a winner can be declared
+    public static final int MIN_ROUNDS = 3;
     // Increased slightly so the zone shrinks a bit more slowly per round
     public final double[] roundRadii = new double[]{240, 200, 160, 130, 110, 80, 60};
     public final Map<Player, Long> outsideSince = new HashMap<>();
@@ -43,7 +45,10 @@ public class Simulator {
     }
 
     public boolean isFinished(){
-        return round >= maxRounds || players.stream().filter(p->p.alive).count() <= 1;
+        long alive = players.stream().filter(p->p.alive).count();
+        // require at least MIN_ROUNDS to have been played before declaring finished
+        boolean basicFinished = (round >= maxRounds) || (alive <= 1);
+        return basicFinished && round >= MIN_ROUNDS;
     }
 
     public void advanceRound(){
@@ -59,7 +64,12 @@ public class Simulator {
         for (Player p : players) if (p.alive) alive.add(p);
         int aliveCount = alive.size();
         if (aliveCount > 1) {
-            int maxElim = Math.min(aliveCount - 1, 5); // never eliminate all here
+            // scale max eliminations with number of alive players:
+            // - more players => more elimination
+            // - at most half of alive players
+            // - absolute cap at 8
+            int scaledMax = Math.min(8, Math.max(1, aliveCount / 2));
+            int maxElim = Math.min(aliveCount - 1, scaledMax); // ensure we never eliminate all here
             int elimCount = 1 + rng.nextInt(maxElim); // 1..maxElim
             // shuffle and eliminate first elimCount players
             Collections.shuffle(alive, rng);
@@ -153,10 +163,48 @@ public class Simulator {
     private double clamp(double v, double a, double b){ return Math.max(a, Math.min(b, v)); }
 
     private void checkFinalWinner(){
-        // Determine a winner for the adaptive zone.
-        winnerLeftId = findZoneWinner(true);
-        // clear any old randomRight data
-        // (no random zone in this simplified version)
+        // Ensure we end with at most one alive player before declaring winner.
+        long aliveNow = players.stream().filter(p -> p.alive).count();
+        if (aliveNow > 1) {
+            eliminateUntilOneLeft();
+            aliveNow = players.stream().filter(p -> p.alive).count();
+        }
+
+        // If exactly one remains, that player is the winner for the adaptive zone.
+        if (aliveNow == 1) {
+            Player w = null; for (Player p : players) if (p.alive) { w = p; break; }
+            winnerLeftId = w != null ? w.id : -1;
+        } else {
+            // fallback: pick a winner by heuristic
+            winnerLeftId = findZoneWinner(true);
+        }
+    }
+
+    // Public API to force finish the game immediately (calculate final winners)
+    public void finishGame(){
+        // ensure we respect the minimum rounds requirement
+        if(this.round < MIN_ROUNDS) this.round = MIN_ROUNDS;
+        checkFinalWinner();
+        // mark as finished by advancing round to maxRounds
+        this.round = this.maxRounds;
+    }
+
+    // Repeatedly eliminate random alive players until at most one remains.
+    private void eliminateUntilOneLeft(){
+        List<Player> aliveList = new ArrayList<>();
+        while(true){
+            aliveList.clear();
+            for(Player p : players) if(p.alive) aliveList.add(p);
+            int aliveCount = aliveList.size();
+            if(aliveCount <= 1) break;
+            int maxElim = Math.min(aliveCount - 1, 5);
+            int elimCount = 1 + rng.nextInt(maxElim);
+            Collections.shuffle(aliveList, rng);
+            for(int i=0;i<elimCount && aliveList.size()>1;i++){
+                Player out = aliveList.get(i);
+                out.alive = false;
+            }
+        }
     }
 
     // returns the winning player's id for the left zone (useLeft=true) or right zone (false), or -1
