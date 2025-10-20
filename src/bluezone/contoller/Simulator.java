@@ -16,7 +16,8 @@ public class Simulator {
     // when true, candidateAdaptive() will return a random zone rather than sampling players
     public boolean randomMode = false;
     // Increased slightly so the zone shrinks a bit more slowly per round
-    public final double[] roundRadii = new double[]{240, 200, 160, 130, 110, 80, 60};
+    // Scaled up from previous values (~+20%) to make each round's zone a little larger
+    public final double[] roundRadii = new double[]{280, 240, 200, 160, 140, 100, 80};
     public final Map<Player, Long> outsideSince = new HashMap<>();
 
     public Zone adaptiveLeft;
@@ -110,7 +111,7 @@ public class Simulator {
         }
     }
 
-    public void stepAnimation(){
+   public void stepAnimation(){
         for(Player p : players){
             if(!p.alive) continue;
             double speed = 0.4 + p.activity * 1.2;
@@ -118,23 +119,58 @@ public class Simulator {
             p.x = clamp(p.x, 12, canvasW - 12);
             p.y = clamp(p.y, 12, canvasH - 12);
         }
+        // Simple combat: players close to each other may fight and one dies.
+        // This simulates player vs player eliminations during the animation ticks.
+        double combatRadius = 12.0; // pixels
+        List<Player> aliveList = new ArrayList<>();
+        for (Player p : players) if (p.alive) aliveList.add(p);
+        // shuffle order so fights are randomized
+        Collections.shuffle(aliveList, rng);
+        for (int i = 0; i < aliveList.size(); i++) {
+            Player a = aliveList.get(i);
+            if (!a.alive) continue; // might have been killed earlier this tick
+            for (int j = i+1; j < aliveList.size(); j++) {
+                Player b = aliveList.get(j);
+                if (!b.alive) continue;
+                double dx = a.x - b.x;
+                double dy = a.y - b.y;
+                double d = Math.hypot(dx, dy);
+                if (d <= combatRadius) {
+                    // resolve duel uniformly at random (50/50)
+                    if (rng.nextBoolean()) {
+                        // a wins
+                        b.alive = false;
+                        a.kills += 1;
+                    } else {
+                        // b wins
+                        a.alive = false;
+                        b.kills += 1;
+                        break; // a is dead, stop checking further opponents for a
+                    }
+                }
+            }
+        }
+        // Outside-of-zone handling: if a player remains outside the current zone for >= 10 seconds, eliminate them.
         long now = System.currentTimeMillis();
         double currentRadius = roundRadii[Math.min(round, roundRadii.length-1)];
-        for(Player p : players){
-            if(!p.alive) continue;
+        for (Player p : players) {
+            if (!p.alive) continue;
             double dx = p.x - adaptiveLeft.x;
             double dy = p.y - adaptiveLeft.y;
             double d = Math.hypot(dx, dy);
-            if(d > currentRadius){
+            if (d > currentRadius) {
                 outsideSince.putIfAbsent(p, now);
                 long since = now - outsideSince.get(p);
-                if(since >= 10000){ p.alive = false; outsideSince.remove(p); }
+                if (since >= 10000) { // 10 seconds outside
+                    p.alive = false;
+                    outsideSince.remove(p);
+                }
             } else {
+                // back inside -> reset timer
                 outsideSince.remove(p);
             }
         }
     }
-
     private Zone[] candidateAdaptive(){
         List<Player> alive = new ArrayList<>();
         for(Player p : players) if(p.alive) alive.add(p);
