@@ -172,6 +172,11 @@ public class Simulator {
         }
     }
     private Zone[] candidateAdaptive(){
+        // if randomMode is enabled, always pick a random zone instead of sampling players
+        if (randomMode) {
+            return new Zone[]{ candidateRandom() };
+        }
+
         List<Player> alive = new ArrayList<>();
         for(Player p : players) if(p.alive) alive.add(p);
         if(alive.isEmpty()){

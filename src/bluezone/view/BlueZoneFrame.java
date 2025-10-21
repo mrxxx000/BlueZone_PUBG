@@ -9,7 +9,8 @@ public class BlueZoneFrame extends JFrame {
     private final BlueZonePanel panel;
 
     public BlueZoneFrame(Simulator sim){
-        setTitle("Adaptive - BlueZone");
+        // Title reflects whether the simulator is running adaptive or random mode
+        setTitle(sim.randomMode ? "Random - BlueZone" : "Adaptive - BlueZone");
     setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
     setLocationRelativeTo(null);
 

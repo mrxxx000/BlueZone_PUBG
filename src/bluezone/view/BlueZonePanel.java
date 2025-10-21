@@ -18,6 +18,9 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
     private int lastMultipleTriggered = -1;
     private JLabel roundLabel = null;
     private JLabel countdownLabel = null;
+    // live metric histories
+    private java.util.List<Integer> playersInZoneHistory = new java.util.ArrayList<>();
+    private java.util.List<Integer> deathsOutsideHistory = new java.util.ArrayList<>();
     // single adaptive map only
 
     public BlueZonePanel(Simulator sim){
@@ -28,9 +31,27 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
         sim.reset(30);
     // always use 6 rounds (game length fixed). The game may finish earlier per Simulator rules.
     sim.maxRounds = 6;
-        animTimer = new Timer(30, e -> { sim.stepAnimation(); repaint(); });
-        animTimer.start();
+        animTimer = new Timer(30, e -> {
+            // animation tick: advance animation and repaint
+            sim.stepAnimation();
+            repaint();
+            // if only one (or zero) player remains, finish and announce immediately
+            long aliveNow = sim.players.stream().filter(p->p.alive).count();
+            if (aliveNow <= 1 && !sim.isFinished()) {
+                // stop countdown if running
+                if (countdownTimer != null && countdownTimer.isRunning()) countdownTimer.stop();
+                // compute final winners and mark finished
+                sim.finishGame();
+                updateRoundLabel();
+                // show dialog on EDT (we are already on EDT via Swing Timer)
+                showWinner();
+                // stop this animation timer to prevent repeated dialogs
+                ((Timer) e.getSource()).stop();
+                return;
+            }
+        });
 
+        // create countdown after animTimer so the anim tick can safely reference it
         countdownTimer = new Timer(1000, e -> {
             if(sim.isFinished()) { countdownTimer.stop(); return; }
             countdownSeconds = Math.max(0, countdownSeconds - 1);
@@ -51,6 +72,8 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
             }
         });
         countdownTimer.start();
+        // start anim timer last to avoid it running before countdownTimer is assigned
+        animTimer.start();
     }
 
     public void setHoverLabel(JLabel l){ this.hoverLabel = l; }
@@ -77,7 +100,21 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
         startCountdown();
         updateRoundLabel();
     }
-    public void advanceRound(){ sim.advanceRound(); if(sim.isFinished()){ showWinner(); } updateRoundLabel(); }
+    public void advanceRound(){ 
+        sim.advanceRound(); 
+        // record live metrics after advancing
+        double currentRadius = sim.roundRadii[Math.min(sim.round, sim.roundRadii.length-1)];
+        int inZone = 0, outside = 0;
+        for (Player p : sim.players) {
+            if (!p.alive) continue;
+            double d = Math.hypot(p.x - (sim.adaptiveLeft != null ? sim.adaptiveLeft.x : sim.canvasW/2.0), p.y - (sim.adaptiveLeft != null ? sim.adaptiveLeft.y : sim.canvasH/2.0));
+            if (d <= currentRadius) inZone++; else outside++;
+        }
+        playersInZoneHistory.add(inZone);
+        deathsOutsideHistory.add(outside);
+        if(sim.isFinished()){ showWinner(); } 
+        updateRoundLabel(); 
+    }
 
     // Advance equivalent to spending 10 seconds: reduce countdown by 10 and advance one round
     public void advanceByOneStep(){
@@ -105,8 +142,8 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
     // Show the adaptive zone winner and stats
         double currentRadius = sim.roundRadii[Math.min(sim.round, sim.roundRadii.length-1)];
         StringBuilder sb = new StringBuilder();
-        sb.append("Adaptive zone:\n");
-        if(sim.adaptiveLeft != null){
+    sb.append(sim.randomMode ? "Random zone:\n" : "Adaptive zone:\n");
+    if(sim.adaptiveLeft != null){
             int inLeft = 0;
             for(Player p : sim.players) if(p.alive && dist(p.x, p.y, sim.adaptiveLeft.x, sim.adaptiveLeft.y) <= currentRadius) inLeft++;
             sb.append(String.format("Players inside: %d\n", inLeft));
