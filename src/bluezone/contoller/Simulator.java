@@ -15,8 +15,6 @@ public class Simulator {
     public static final int MIN_ROUNDS = 3;
     // when true, candidateAdaptive() will return a random zone rather than sampling players
     public boolean randomMode = false;
-    // Increased slightly so the zone shrinks a bit more slowly per round
-    // Scaled up from previous values (~+20%) to make each round's zone a little larger
     public final double[] roundRadii = new double[]{280, 240, 200, 160, 140, 100, 80};
     public final Map<Player, Long> outsideSince = new HashMap<>();
 
@@ -62,7 +60,6 @@ public class Simulator {
         round++;
         outsideSince.clear();
         // Randomly eliminate a random number of alive players each advance.
-        // We pick between 1 and min(aliveCount-1, 5) to avoid eliminating everyone in one go.
         List<Player> alive = new ArrayList<>();
         for (Player p : players) if (p.alive) alive.add(p);
         int aliveCount = alive.size();

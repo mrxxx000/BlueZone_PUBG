@@ -152,6 +152,12 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
             else sb.append("Winner: (none)\n");
         } else sb.append("No adaptive zone data.\n");
         JOptionPane.showMessageDialog(this, sb.toString(), "Zone Winner / Stats", JOptionPane.INFORMATION_MESSAGE);
+        // persist structured results for later analysis
+        try {
+            bluezone.util.ResultsRecorder.recordRun(sim, playersInZoneHistory, deathsOutsideHistory, countdownSeconds);
+        } catch (Exception ex) {
+            System.err.println("Failed to record run: " + ex.getMessage());
+        }
     }
 
     @Override
