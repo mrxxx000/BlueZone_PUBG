@@ -109,10 +109,48 @@ public class Simulator {
     }
 
    public void stepAnimation(){
+        // Movement: players should slowly steer toward the current adaptive zone.
+        // Players have a low approach speed; we keep a little random jitter so movement
+        // doesn't look perfectly uniform.
+        double approachBase = 0.2; // base approach speed (pixels per tick)
+        double approachJitter = 0.25; // extra random jitter applied to movement
+        double approachBuffer = 60.0; // grace distance beyond the radius where players are allowed to approach
+        double currentRadius = roundRadii[Math.min(round, roundRadii.length-1)];
+
         for(Player p : players){
             if(!p.alive) continue;
-            double speed = 0.4 + p.activity * 1.2;
-            p.x += rand(-1,1) * speed; p.y += rand(-1,1) * speed;
+            if (adaptiveLeft != null) {
+                double dx = adaptiveLeft.x - p.x;
+                double dy = adaptiveLeft.y - p.y;
+                double dist = Math.hypot(dx, dy);
+                // if outside the zone, steer toward center at low speed
+                if (dist > currentRadius) {
+                    double speed = approachBase + p.activity * 0.4; // activity still affects speed slightly
+                    // normalize vector
+                    if (dist > 1e-6) {
+                        double vx = dx / dist * speed;
+                        double vy = dy / dist * speed;
+                        // add small random jitter
+                        vx += rand(-1, 1) * approachJitter * 0.5;
+                        vy += rand(-1, 1) * approachJitter * 0.5;
+                        p.x += vx;
+                        p.y += vy;
+                    } else {
+                        // already at center, small jitter
+                        p.x += rand(-1,1) * approachJitter;
+                        p.y += rand(-1,1) * approachJitter;
+                    }
+                } else {
+                    // inside zone: small random wandering
+                    double speed = 0.2 + p.activity * 0.4;
+                    p.x += rand(-1,1) * speed;
+                    p.y += rand(-1,1) * speed;
+                }
+            } else {
+                // no zone known: fallback to previous random walk
+                double speed = 0.4 + p.activity * 1.2;
+                p.x += rand(-1,1) * speed; p.y += rand(-1,1) * speed;
+            }
             p.x = clamp(p.x, 12, canvasW - 12);
             p.y = clamp(p.y, 12, canvasH - 12);
         }
@@ -147,23 +185,27 @@ public class Simulator {
                 }
             }
         }
-        // Outside-of-zone handling: if a player remains outside the current zone for >= 10 seconds, eliminate them.
+        // Outside-of-zone handling: if a player remains sufficiently far outside the current zone for >= 10 seconds, eliminate them.
+        // Players that are just outside the radius but within `approachBuffer` are allowed to approach and won't be eliminated.
         long now = System.currentTimeMillis();
-        double currentRadius = roundRadii[Math.min(round, roundRadii.length-1)];
         for (Player p : players) {
             if (!p.alive) continue;
             double dx = p.x - adaptiveLeft.x;
             double dy = p.y - adaptiveLeft.y;
             double d = Math.hypot(dx, dy);
-            if (d > currentRadius) {
+            if (d > currentRadius + approachBuffer) {
+                // clearly far outside -> start/continue outside timer
                 outsideSince.putIfAbsent(p, now);
                 long since = now - outsideSince.get(p);
                 if (since >= 10000) { // 10 seconds outside
                     p.alive = false;
                     outsideSince.remove(p);
                 }
+            } else if (d > currentRadius) {
+                // within the approach buffer: allow approaching players to enter, do not count against outside timer
+                outsideSince.remove(p);
             } else {
-                // back inside -> reset timer
+                // inside -> reset timer
                 outsideSince.remove(p);
             }
         }
