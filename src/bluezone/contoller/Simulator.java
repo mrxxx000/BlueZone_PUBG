@@ -119,37 +119,62 @@ public class Simulator {
 
         for(Player p : players){
             if(!p.alive) continue;
-            if (adaptiveLeft != null) {
-                double dx = adaptiveLeft.x - p.x;
-                double dy = adaptiveLeft.y - p.y;
+            // decide per-player whether they actively approach the zone this tick or just roam
+            double approachChance = 0.45 + (p.activity - 0.5) * 0.4; // lower base so fewer always approach
+            approachChance = Math.max(0.05, Math.min(0.9, approachChance));
+            boolean willApproach = rng.nextDouble() < approachChance;
+
+            if (adaptiveLeft != null && willApproach) {
+                // ensure player has a distinct interior target inside the zone (not the exact center)
+                if (!p.hasTarget) {
+                    double targetRadius = Math.max(10, currentRadius * 0.55);
+                    double angle = rng.nextDouble() * Math.PI * 2;
+                    double r = rng.nextDouble() * targetRadius;
+                    p.targetX = clamp(adaptiveLeft.x + Math.cos(angle) * r, 12, canvasW - 12);
+                    p.targetY = clamp(adaptiveLeft.y + Math.sin(angle) * r, 12, canvasH - 12);
+                    p.hasTarget = true;
+                }
+                double dx = p.targetX - p.x;
+                double dy = p.targetY - p.y;
                 double dist = Math.hypot(dx, dy);
-                // if outside the zone, steer toward center at low speed
-                if (dist > currentRadius) {
-                    double speed = approachBase + p.activity * 0.4; // activity still affects speed slightly
-                    // normalize vector
-                    if (dist > 1e-6) {
-                        double vx = dx / dist * speed;
-                        double vy = dy / dist * speed;
-                        // add small random jitter
-                        vx += rand(-1, 1) * approachJitter * 0.5;
-                        vy += rand(-1, 1) * approachJitter * 0.5;
-                        p.x += vx;
-                        p.y += vy;
-                    } else {
-                        // already at center, small jitter
-                        p.x += rand(-1,1) * approachJitter;
-                        p.y += rand(-1,1) * approachJitter;
-                    }
-                } else {
-                    // inside zone: small random wandering
-                    double speed = 0.2 + p.activity * 0.4;
-                    p.x += rand(-1,1) * speed;
-                    p.y += rand(-1,1) * speed;
+                double speed = approachBase + p.activity * 0.4;
+                if (dist > 1e-6) {
+                    double vx = dx / dist * speed;
+                    double vy = dy / dist * speed;
+                    vx += rand(-1, 1) * approachJitter * 0.5;
+                    vy += rand(-1, 1) * approachJitter * 0.5;
+                    p.x += vx; p.y += vy;
+                }
+                // if reached target, occasionally pick a new one (so players move around inside)
+                if (dist <= speed * 1.5 || rng.nextDouble() < 0.02) {
+                    p.hasTarget = false;
                 }
             } else {
-                // no zone known: fallback to previous random walk
+                // roaming behavior: pick a short-range wandering target or sometimes dash elsewhere
+                if (!p.hasTarget || rng.nextDouble() < 0.01) {
+                    if (rng.nextDouble() < 0.2) {
+                        // occasional dash to a random map point
+                        p.targetX = rand(20, canvasW - 20);
+                        p.targetY = rand(20, canvasH - 20);
+                    } else {
+                        // local wander target
+                        p.targetX = clamp(p.x + rand(-80, 80), 12, canvasW - 12);
+                        p.targetY = clamp(p.y + rand(-80, 80), 12, canvasH - 12);
+                    }
+                    p.hasTarget = true;
+                }
+                double dx = p.targetX - p.x;
+                double dy = p.targetY - p.y;
+                double dist = Math.hypot(dx, dy);
                 double speed = 0.4 + p.activity * 1.2;
-                p.x += rand(-1,1) * speed; p.y += rand(-1,1) * speed;
+                if (dist > 1e-6) {
+                    double vx = dx / dist * speed;
+                    double vy = dy / dist * speed;
+                    vx += rand(-1, 1) * approachJitter;
+                    vy += rand(-1, 1) * approachJitter;
+                    p.x += vx; p.y += vy;
+                }
+                if (dist <= speed * 1.5) p.hasTarget = false;
             }
             p.x = clamp(p.x, 12, canvasW - 12);
             p.y = clamp(p.y, 12, canvasH - 12);
