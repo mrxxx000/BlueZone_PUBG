@@ -10,8 +10,7 @@ public class SimulationStats {
     public static class Stats {
         public double avgDistanceToCenter;
         public int aliveCount;
-        public double avgKills;
-        public double aliveRatio;
+    public double avgKills;
         public double killVariance;
         public double avgActivity;
         public int winnerKills;
@@ -24,7 +23,6 @@ public class SimulationStats {
             sb.append(String.format(Locale.ROOT, "\"avgDistanceToCenter\": %.4f,", avgDistanceToCenter));
             sb.append(String.format(Locale.ROOT, "\"aliveCount\": %d,", aliveCount));
             sb.append(String.format(Locale.ROOT, "\"avgKills\": %.4f,", avgKills));
-            sb.append(String.format(Locale.ROOT, "\"aliveRatio\": %.4f,", aliveRatio));
             sb.append(String.format(Locale.ROOT, "\"killVariance\": %.4f,", killVariance));
             sb.append(String.format(Locale.ROOT, "\"avgActivity\": %.4f,", avgActivity));
             sb.append(String.format(Locale.ROOT, "\"winnerKills\": %d,", winnerKills));
@@ -55,8 +53,7 @@ public class SimulationStats {
         }
         s.aliveCount = alive;
         s.avgDistanceToCenter = alive > 0 ? sumDist / alive : 0.0;
-        s.avgKills = total > 0 ? sumKills / total : 0.0;
-        s.aliveRatio = total > 0 ? (double) alive / total : 0.0;
+    s.avgKills = total > 0 ? sumKills / total : 0.0;
         // variance of kills
         double meanKills = s.avgKills;
         double var = 0;
