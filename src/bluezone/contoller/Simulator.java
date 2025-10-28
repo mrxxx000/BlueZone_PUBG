@@ -19,14 +19,20 @@ public class Simulator {
     public final Map<Player, Long> outsideSince = new HashMap<>();
 
     public Zone adaptiveLeft;
-    // per-zone winner ids (-1 means none)
     public int winnerLeftId = -1;
-    public int winnerRightId = -1;
 
-    public Simulator(int w, int h){ this.canvasW = w; this.canvasH = h; }
+    // Construct a Simulator with the given canvas dimensions.
+     
+    public Simulator(int w, int h)
+    { this.canvasW = w; this.canvasH = h; }
 
-    public double rand(double a, double b){ return a + rng.nextDouble()*(b-a); }
+    // Return a uniform random double in the interval [a, b).
+    public double rand(double a, double b)
+    { return a + rng.nextDouble()*(b-a); }
 
+    // Reset the simulator state and spawn `count` players with randomized
+    // positions and stats. Resets the round counter and sets the initial
+    // adaptive zone according to `randomMode`.
     public void reset(int count){
         players.clear();
         int leftMaxX = canvasW - 20;
@@ -42,9 +48,15 @@ public class Simulator {
             players.add(p);
         }
         round = 0;
-        if (randomMode) adaptiveLeft = candidateRandom(); else adaptiveLeft = new Zone(canvasW/2, canvasH/2);
+        if (randomMode) adaptiveLeft = candidateRandom(); 
+        else adaptiveLeft = new Zone(canvasW/2, canvasH/2);
     }
 
+    /**
+     * Check whether the simulation has finished.
+     * Returns true if either the round limit was reached or at most one
+     * player is alive, and at least MIN_ROUNDS have been played.
+     */
     public boolean isFinished(){
         long alive = players.stream().filter(p->p.alive).count();
         // require at least MIN_ROUNDS to have been played before declaring finished
@@ -52,6 +64,11 @@ public class Simulator {
         return basicFinished && round >= MIN_ROUNDS;
     }
 
+    /**
+     * Advance the simulation by one round. Selects the adaptive zone,
+     * increments the round counter, randomly eliminates a number of
+     * alive players, and computes per-zone winners or the final winner
+     */
     public void advanceRound(){
         if(round >= maxRounds) return;
     Zone[] adapt = candidateAdaptive();
@@ -79,7 +96,7 @@ public class Simulator {
             }
         }
 
-        // If we've reached max rounds or only 0/1 players remain, determine the final winner
+        // If max rounds reached or only 0/1 players remain, determine the final winner
         long aliveNow = players.stream().filter(p -> p.alive).count();
 
         // compute inside count using currentRadius
@@ -108,7 +125,14 @@ public class Simulator {
         }
     }
 
-   public void stepAnimation(){
+    /**
+     * Perform a single animation tick: move alive players toward or around
+     * the adaptive zone, resolve local combat encounters, and eliminate
+     * players who remain far outside the zone for too long.
+     * Side-effects: updates player positions, targets, kills, alive flags,
+     * and the `outsideSince` timers.
+     */
+    public void stepAnimation(){
         // Movement: players should slowly steer toward the current adaptive zone.
         // Players have a low approach speed; we keep a little random jitter so movement
         // doesn't look perfectly uniform.
@@ -235,11 +259,16 @@ public class Simulator {
             }
         }
     }
+    
+     // Choose adaptive zone(s) for the current round.
+     // If `randomMode` is enabled, returns a random zone. Otherwise samples
+     // among alive players using a weight computed from kills and activity,
+     
     private Zone[] candidateAdaptive(){
         // if randomMode is enabled, always pick a random zone instead of sampling players
         if (randomMode) {
             return new Zone[]{ candidateRandom() };
-        }
+        } 
 
         List<Player> alive = new ArrayList<>();
         for(Player p : players) if(p.alive) alive.add(p);
@@ -257,6 +286,11 @@ public class Simulator {
         return new Zone[]{left};
     }
 
+    /**
+     * Sample a player from `alive` using `weights` (sum provided) and
+     * return a `Zone` placed near the sampled player's position with
+     * bounded jitter. `useLeft` is reserved for potential multi-zone logic.
+     */
     private Zone sampleWeighted(List<Player> alive, double[] weights, double sum, boolean useLeft){
         double r = rng.nextDouble() * sum; int idx = 0;
         while(r > 0 && idx < weights.length){ r -= weights[idx++]; }
@@ -267,14 +301,25 @@ public class Simulator {
         return new Zone(x,y);
     }
 
+    // Pick a random Zone within the allowed map margins.
     private Zone candidateRandom(){
         double x = rand(60, canvasW - 60);
         double y = rand(60, canvasH - 60);
         return new Zone(x,y);
     }
 
-    private double clamp(double v, double a, double b){ return Math.max(a, Math.min(b, v)); }
+    
+     // Clamp a value to the inclusive range [a, b].
+     
+    private double clamp(double v, double a, double b)
+    { return Math.max(a, Math.min(b, v)); }
 
+    /**
+     * Compute and record the final winner for the adaptive zone.
+     * Ensures at most one alive player remains (may eliminate randomly
+     * until one left) and sets `winnerLeftId` using the remaining player
+     * or a heuristic fallback.
+     */
     private void checkFinalWinner(){
         // Ensure we end with at most one alive player before declaring winner.
         long aliveNow = players.stream().filter(p -> p.alive).count();
@@ -294,6 +339,11 @@ public class Simulator {
     }
 
     // Public API to force finish the game immediately (calculate final winners)
+    /**
+     * Public API to force the game to finish immediately. Ensures the
+     * minimum rounds requirement, computes final winners, and sets the
+     * round counter to `maxRounds` to mark termination.
+     */
     public void finishGame(){
         // ensure we respect the minimum rounds requirement
         if(this.round < MIN_ROUNDS) this.round = MIN_ROUNDS;
@@ -303,6 +353,10 @@ public class Simulator {
     }
 
     // Repeatedly eliminate random alive players until at most one remains.
+    /**
+     * Repeatedly eliminate random alive players in small batches until
+     * at most one remains. Mutates player `alive` flags.
+     */
     private void eliminateUntilOneLeft(){
         List<Player> aliveList = new ArrayList<>();
         while(true){
@@ -320,7 +374,12 @@ public class Simulator {
         }
     }
 
-    // returns the winning player's id for the left zone (useLeft=true) or right zone (false), or -1
+    /**
+     * Heuristic to pick a winning player's id for the adaptive zone
+     * (left when `useLeft` is true). Prefers alive players inside the
+     * zone, scores by `kills * 2 + activity`, and breaks ties using
+     * `tieBreak`. Falls back to best alive anywhere or best overall.
+     */   
     private int findZoneWinner(boolean useLeft){
         double bestScore = Double.NEGATIVE_INFINITY;
         Player best = null;
@@ -366,6 +425,10 @@ public class Simulator {
     }
 
     // tie-break heuristic: prefer higher kills, then higher activity, then lower id
+    /**
+     * Tie-break comparator used by `findZoneWinner`.
+     * Prefers higher kills, then higher activity, then lower id.
+     */
     private boolean tieBreak(Player a, Player b) {
         if (a.kills != b.kills) return a.kills > b.kills;
         if (Double.compare(a.activity, b.activity) != 0) return a.activity > b.activity;

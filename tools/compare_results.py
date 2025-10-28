@@ -30,7 +30,6 @@ def load_runs():
             try:
                 data = json.loads(text)
             except json.JSONDecodeError as e:
-                # Attempt a simple repair: convert comma decimals like 0,1564 -> 0.1564
                 import re
                 repaired = re.sub(r'(:\s*)(-?\d+),(\d+)', r'\1\2.\3', text)
                 try:
@@ -77,7 +76,6 @@ def metrics_from_run(run):
     mean_k = avg_kills
     var_k = sum((k - mean_k) ** 2 for k in kills) / total if total else 0
     avg_activity = sum(p.get('activity', 0) for p in players) / total if total else 0
-    # avgDistanceToCenter isn't recorded reliably in the run JSON without zone center; use distance field if present
     distances = [p.get('distance', None) for p in players if p.get('distance') is not None]
     avg_dist = sum(distances) / len(distances) if distances else 0
     winner_id = run.get('winnerLeftId')
@@ -92,7 +90,6 @@ def metrics_from_run(run):
         'avgDistanceToCenter': avg_dist,
         'aliveCount': alive_count,
         'avgKills': avg_kills,
-        # aliveRatio intentionally omitted
         'killVariance': var_k,
         'avgActivity': avg_activity,
         'winnerKills': winner_kills,
@@ -102,13 +99,11 @@ def metrics_from_run(run):
 
 
 def pick_latest_by_mode(runs):
-    # kept for backward compatibility but not used below
     by_mode = {}
     for r in runs:
         mode = r.get('mode', 'adaptive')
         ts = parse_ts(r.get('timestamp'))
         if ts is None:
-            # fallback: use file mtime
             ts = datetime.fromtimestamp(os.path.getmtime(r.get('_path')), tz=timezone.utc)
         current = by_mode.get(mode)
         if current is None or ts > current[0]:
@@ -153,10 +148,8 @@ def compare_metrics(adaptive_metrics, random_metrics):
             diffs[k] = b_f - a_f
         else:
             diffs[k] = None
-    # compute some higher-level derived diffs as suggested
     derived = {
         'fairnessImprovement': (adaptive_metrics.get('avgDistanceToCenter', 0) - random_metrics.get('avgDistanceToCenter', 0)) if adaptive_metrics and random_metrics else None,
-        # survivabilityGain (based on aliveRatio) removed
         'stabilityGain': (adaptive_metrics.get('killVariance', 0) - random_metrics.get('killVariance', 0)) if adaptive_metrics and random_metrics else None
     }
     return { 'perMetric': numeric, 'diffs': diffs, 'derived': derived }

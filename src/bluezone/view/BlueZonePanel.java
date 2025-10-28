@@ -93,7 +93,6 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
 
     public void reset(int count){
         sim.reset(count);
-        // fixed to 6 rounds
     sim.maxRounds = 6;
         // restart countdown
         resetCountdown();
@@ -116,7 +115,6 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
         updateRoundLabel(); 
     }
 
-    // Advance equivalent to spending 10 seconds: reduce countdown by 10 and advance one round
     public void advanceByOneStep(){
         if(sim.isFinished()) return;
         countdownSeconds = Math.max(0, countdownSeconds - 10);
@@ -152,7 +150,6 @@ public class BlueZonePanel extends JPanel implements MouseMotionListener {
             else sb.append("Winner: (none)\n");
         } else sb.append("No adaptive zone data.\n");
         JOptionPane.showMessageDialog(this, sb.toString(), "Zone Winner / Stats", JOptionPane.INFORMATION_MESSAGE);
-        // persist structured results for later analysis
         try {
             bluezone.util.ResultsRecorder.recordRun(sim, playersInZoneHistory, deathsOutsideHistory, countdownSeconds);
         } catch (Exception ex) {
